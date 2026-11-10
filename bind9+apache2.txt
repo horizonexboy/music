@@ -1,0 +1,139 @@
+# This is the network config written by 'subiquity'
+network:
+  ethernets:
+    enp0s3:
+      dhcp4: false
+      dhcp6: false
+      addresses:
+        - 192.168.30.10/24
+      routes:
+        - to: default
+          via: 192.168.30.1
+      nameservers:
+        addresses:
+          - 8.8.8.8
+          - 1.1.1.1
+  version: 2
+
+===============================================
+
+options {
+    directory "/var/cache/bind";
+
+    listen-on { any; };
+    listen-on-v6 { none; };
+
+    recursion yes;
+
+    allow-query { any; };
+    allow-recursion { 127.0.0.1; 192.168.10.0/24; 10.10.22.0/24; 192.168.30.0/24; };
+
+    forwarders {
+        8.8.8.8;
+        1.1.1.1;
+    };
+
+        dnssec-validation no;
+
+        version "not currently available";
+};
+
+===================================================
+
+zone "lab-smk.xyz" {
+    type master;
+    file "/etc/bind/db.lab-smk.xyz";
+};
+zone "30.168.192.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.192";
+};
+
+======================================================
+
+$TTL    604800
+@       IN      SOA     ns.lab-smk.xyz. root.lab-smk.xyz. (
+                              3          ; Serial
+                         604800          ; Refresh
+                          86400          ; Retry
+                        2419200          ; Expire
+                         604800 )        ; Negative Cache TTL
+
+;
+@       IN      NS      ns.lab-smk-xyz.
+10      IN      PTR     ns.lab-smk.xyz.
+
+====================================================
+
+$TTL    604800
+@       IN      SOA     ns1.lab-smk.xyz. root.lab-smk.xyz. (
+                              2         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+
+;
+@       IN      NS      ns1.lab-smk.xyz.
+@       IN      A       192.168.30.10
+ns1     IN      A       192.168.30.10
+www     IN      A       192.168.30.10
+monitor IN      A       192.168.30.10
+
+====================================================
+
+<VirtualHost *:80>
+        ServerAdmin webmaster@localhost
+        ServerName lab-smk.xyz
+        ServerAlias www.lab-smk.xyz
+        Redirect permanent / https://lab-smk.xyz/
+</VirtualHost>
+<VirtualHost *:443>
+        ServerAdmin webmaster@localhost
+        ServerName lab-smk.xyz
+        ServerAlias www.lab-smk.xyz
+        DocumentRoot /var/www/html/web
+
+        ErrorLog ${APACHE_LOG_DIR}/error.log
+        CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+        SSLEngine on
+        SSLCertificateFile      /etc/ssl/certs/localhost.crt
+        SSLCertificateKeyFile   /etc/ssl/private/localhost.key
+
+        <FilesMatch "\.(?:cgi|shtml|phtml|php)$">
+                SSLOptions +StdEnvVars
+        </FilesMatch>
+
+        <Directory /usr/lib/cgi-bin>
+                SSLOptions +StdEnvVars
+        </Directory>
+</VirtualHost>
+
+==========================================
+
+<VirtualHost *:80>
+        ServerAdmin webmaster@localhost
+        ServerName monitor.lab-smk.xyz
+        Redirect permanent / https://monitor.lab-smk.xyz/
+</VirtualHost>
+<VirtualHost *:443>
+        ServerAdmin webmaster@localhost
+        ServerName monitor.lab-smk.xyz
+        DocumentRoot /usr/share/cacti/site
+
+        ErrorLog ${APACHE_LOG_DIR}/error.log
+        CustomLog ${APACHE_LOG_DIR}/access.log combined
+
+        SSLEngine on
+        SSLCertificateFile      /etc/ssl/certs/localhost.crt
+        SSLCertificateKeyFile   /etc/ssl/private/localhost.key
+
+        <FilesMatch "\.(?:cgi|shtml|phtml|php)$">
+                SSLOptions +StdEnvVars
+        </FilesMatch>
+
+        <Directory /usr/lib/cgi-bin>
+                SSLOptions +StdEnvVars
+        </Directory>
+</VirtualHost>
