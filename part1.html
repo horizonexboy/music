@@ -1,0 +1,106 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Part 1</title>
+</head>
+<body>
+
+<audio controls loop>
+    <source
+        src="https://github.com/horizonexboy/music/raw/refs/heads/main/hate%20that%20i%20made%20you%20love%20me.mp3"
+        type="audio/mpeg">
+</audio>
+
+<p style="white-space: pre-wrap;">
+=================================================
+ROUTE MAP
+=========
+1. Config Mikrotik (Router + Swith)
+2. Config Server
+3. Crimping UTP
+4. Splicing FO + Link Budgeting
+=================================================
+
+
+
+
+=================================================
+CONFIG MIKROTIK
+===============
+
+1. RB951
+========
+a. internet lab > ether 1
+b. pc config > ether 5
+c. winbox > reset conf
+
+d. interfaces > vlan > new
+   name vlan_guru_admin - vlan id 10 - ether2 
+   name vlan_siswa      - vlan id 20 - ether2 
+   name vlan_server     - vlan id 30 - ether2
+
+f. tambah ip addr ether1 sesuai lab (192.168.lab.x/24)
+   tambah ip addr ether2 172.16.x.1/25    #kyone r kanggo, mybe muk go implementasi subnetting
+   tambah ip addr wlan1 10.10.x.1/26
+   tambah ip addr vlan10 192.168.10.1/24
+   tambah ip addr vlan20 192.168.20.1/24
+   tambah ip addr vlan30 192.168.30.1/24
+
+g. wireless - security profiles - dynamic keys - wpa & wpa2 - password:12345678
+   wireless - enable - mode:ap bridge - B/G/N - security profiles:profiles1 - SSID:absen_nama
+
+h. ip dns allowRemoteRequest Servers:192.168.lab.1
+   ip firewall NAT masquerade
+   ip routes 0.0.0.0/0 gateway:192.168.lab.1
+
+i. ip dhcpServer vlan10 *dns allow remote request , dns1 192.168.30.10(ip server) dns2 8.8.8.8(alternate)
+   ip dhcpServer vlan20 *dns allow remote request , dns1 192.168.30.10(ip server) dns2 8.8.8.8(alternate)
+   ip dhcpServer wlan1  *dns allow remote request , dns1 192.168.30.10(ip server) dns2 8.8.8.8(alternate)
+
+j. ip firewall > filter rules
+================================================================
+   
+2. RB260
+========
+a. ether2 RB951 > ether1 RB260
+b. pc config > ether 5 *ip static 192.168.88.10/24
+c. browse 192.168.88.1 > system > reset conf
+
+d. VLAN
+   mode enabled port 1,2,3,4
+   Receive 
+	port 1     : only tagged 
+	port 2,3,4 : only untagged 
+   Default vlan ID
+        port 1     : 1
+        port 2     : 10
+        port 3     : 20
+        port 4     : 30
+   Header          
+	all port   : leave as is
+
+e. VLANS
+   vl-10 add if - always strip	- not a		- not a		- not a
+   vl-20 add if - not a		- always strip	- not a		- not a
+   vl-30 add if	- not a		- not a		-always strip 	- not a
+
+==============================================================================
+
+#test pandai2 pemahamane wae si
+#test dhcp vlan 10 & 20
+#test connect wlan
+#test firewall
+*pahami/step , tanya ai , troubleshoot bertahap
+
+=============================================================================
+
+
+©horizonexboy - dibuat dengan seperempat hati
+
+
+</p>
+
+</body>
+</html>

@@ -1,0 +1,548 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Part 2</title>
+</head>
+<body>
+
+<audio controls loop>
+    <source
+        src="https://github.com/horizonexboy/ukk/raw/refs/heads/main/All%20Too%20Well%20(10%20Minute%20Version)%20(Taylor's%20Version)%20(From%20The%20Vault).mp3"
+        type="audio/mpeg">
+</audio>
+
+<p style="white-space: pre-wrap;">
+=================================================
+ROUTE MAP
+=========
+1. Config Mikrotik (Router + Swith)
+2. Config Server
+3. Crimping UTP
+4. Splicing FO + Link Budgeting
+=================================================
+
+
+
+
+=================================================
+CONFIG SERVER
+===============
+
+1. SSH
+========
+a. pc host ubuntu server > ether4 switch (vlan30 RB260)
+   pc host (control panel)
+   ip 192.168.30.11
+   gw 192.168.30.1
+   dns1 192.168.30.10
+   dns2 8.8.8.8
+
+b. start server #karena vlan 30 static ip maka server tidak dapat ip saat first booting
+c. edit netplan
+   sudo nano /etc/netplan/00-installer-config.yaml
+   googling : template netplan ubuntu
+   <img src="https://github.com/horizonexboy/ukk/blob/main/image.png?raw=true" alt="Logo" width="400" height="400">
+d. sudo netplan try
+   sudo apt update -y
+   sudo apt install openssh-server -y
+e. cmd > ssh user@ip
+
+================================================================
+   
+2. BIND9 (DNS SERVER)
+=====================
+a. sudo apt install bind9 bind9-utils -y
+b. cd /etc/bind
+
+   #yang perlu di konfigurasi
+   -named.conf.options : Berfungsi mengatur bagaimana DNS Server bekerja secara keseluruhan.
+   -named.conf.local   : Berfungsi mendaftarkan domain atau zona yang akan dikelola oleh DNS Server kita.
+   -db.lab-smk.xyz     : Berfungsi menyimpan pemetaan nama domain menjadi alamat IP.
+   -db.192             : Berfungsi memetakan alamat IP menjadi nama domain (PTR).
+
+c. sudo nano named.conf.options
+   googling : template named.conf.options
+   <img src="https://github.com/horizonexboy/ukk/blob/main/Screenshot%202026-11-08%20133842.png?raw=true" alt="Logo" width="400" height="200">
+   #HALO HALO , Iku sek nang gambar allow-recursion kurang 1 neh sek 30.1 , add it by yrslf    192.168.30.0/24;   
+
+d. sudo nano named.conf.local
+   googling : template named.conf.local
+   <img src="https://github.com/horizonexboy/ukk/blob/main/Screenshot%202026-11-08%20134741.png?raw=true" alt="Logo" width="400" height="100">
+e. sudo nano db.192
+   googling : template db.192 bind9
+   <img src="https://github.com/horizonexboy/ukk/blob/main/Screenshot%202026-11-08%20134819.png?raw=true" alt="Logo" width="400" height="133">
+f. sudo nano db.lab-smk.xyz
+   googling : template db.lab-smk.xyz bind9
+   <img src="https://github.com/horizonexboy/ukk/blob/main/Screenshot%202026-11-08%20134915.png?raw=true" alt="Logo" width="400" height="180">
+
+g. sudo named-checkconf #cek konfigurasi /named.conf.options
+h. sudo named-checkzone lab-smk.xyz db.lab-smk.xyz #cek konfigurasi /named.conf.local terhadap /db.lab-smk.xyz
+i. #jika tidak ada error
+   sudo systemctl restart bind9
+   sudo systemctl status bind9
+j. cek nslookup
+   buka cmd baru >nslookup lab-smk.xyz
+
+---dns done---
+
+==============================================================================
+
+3. APACHE2 (WEB SERVER)
+=======================
+a. sudo apt install apache2 -y
+b. cek apache hidup dengan buka lab-smk.xyz di chrome #default page apache
+c. cd /etc/apache2/sites-available
+
+   #yg perlu di config
+   -www.lab-smk.xyz.conf
+   -monitor.lab-smk.xyz.conf
+   -/var/www/html/web/index.html
+
+d. sudo cp default-ssl.conf www.lab-smk.xyz.conf 
+   sudo nano www.lab-smk.xyz.conf #hapus command
+   <img src="https://github.com/horizonexboy/ukk/blob/main/Screenshot%202026-11-08%20135119.png?raw=true" alt="Logo" width="400" height="280">
+
+e. sudo cp www.lab-smk.xyz.conf monitor.lab-smk.xyz.conf
+   sudo nano monitor.lab-smk.xyz.conf
+   <img src="https://github.com/horizonexboy/ukk/blob/main/Screenshot%202026-11-08%20135201.png?raw=true" alt="Logo" width="400" height="280">
+
+f. sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/ssl/private/localhost.key \
+  -out /etc/ssl/certs/localhost.crt
+  #copy 3 line sekaligus
+
+g. sudo a2enmod ssl
+   sudo apache2ctl configtest
+   sudo a2dissite 000-default.conf default-ssl.conf
+   sudo a2ensite www.lab-smk.xyz.conf monitor.lab-smk.xyz.conf
+   sudo systemctl restart apache2
+
+h. sudo mkdir /var/www/html/web
+   sudo nano /var/www/html/web/index.html
+   <img src="https://github.com/horizonexboy/ukk/blob/main/Screenshot%202026-11-09%20005736.png?raw=true" alt="Logo" width="400" height="130">
+
+---web done---
+
+================================================================
+##############################################################################
+#Hey, it's 01:26 AM now, I'm too tired. Yang tertulis setelah ini berasal dari chatGPT , lagipula gwe notes format html :v
+#Jobsheet part2 is tested
+##############################################################################
+=============================================================================
+
+4. CACTI (MONITORING SERVER)
+============================
+============================================================
+       RUNBOOK INSTALASI CACTI MONITORING SERVER
+              Ubuntu Server + MikroTik Router
+============================================================
+
+TUJUAN
+------
+Instalasi Cacti dari Ubuntu Server baru untuk memonitor:
+  1. Ubuntu Server melalui SNMP.
+  2. MikroTik gateway Ubuntu melalui SNMP.
+
+KONFIGURASI LAB
+---------------
+OS              : Ubuntu Server 26.04 LTS
+Cacti           : Paket repository Ubuntu
+Web server      : Apache2
+Database        : MariaDB
+RRDtool         : RRDtool
+SNMP            : SNMP v2c
+Timezone        : Asia/Jakarta (WIB)
+IP MikroTik     : 192.168.30.1
+IP Cacti Server : Sesuaikan dengan IP server
+Interface       : Sesuaikan, contoh enp0s3
+
+COMMUNITY SNMP
+--------------
+Ubuntu Server  : cactiLabRO
+MikroTik       : mikrotikRO
+
+CATATAN
+-------
+- DNS, domain, dan konfigurasi VirtualHost tidak dibahas karena
+  sudah dikonfigurasi secara terpisah.
+- Kerjakan bertahap. Tes di runbook ini hanya tes dasar.
+  Jika ada masalah, baru lanjutkan troubleshooting.
+- Sesuaikan versi PHP, IP server, dan nama interface dengan
+  hasil instalasi masing-masing.
+
+
+a. PERSIAPAN UBUNTU
+-------------------
+Update sistem:
+
+  sudo apt update
+  sudo apt upgrade -y
+
+Atur timezone:
+
+  sudo timedatectl set-timezone Asia/Jakarta
+
+Periksa jaringan:
+
+  ip -br a
+  ip route
+
+Pastikan Ubuntu mendapat IP yang benar dan default gateway:
+
+  192.168.30.1
+
+
+b. INSTALASI PAKET CACTI
+------------------------
+Install paket:
+
+  sudo apt install apache2 mariadb-server rrdtool snmp snmpd cacti
+
+Saat prompt instalasi muncul:
+
+  Configure database for Cacti with dbconfig-common?
+      Pilih: Yes
+
+  Cacti application password:
+      Isi password yang ingin digunakan untuk login Cacti,
+      lalu masukkan kembali saat diminta konfirmasi.
+      Simpan password tersebut.
+
+  Prompt password berikutnya untuk user administratif/root
+  MySQL atau MariaDB:
+      Biarkan kosong, lalu lanjutkan.
+
+  Web server:
+      Pilih Apache2 jika diminta.
+
+Catatan:
+Password login Cacti berbeda dari password database. Ikuti urutan
+prompt yang tampil pada installer paket Ubuntu.
+
+
+c. LOGIN AWAL CACTI
+-------------------
+Buka alamat Cacti yang sudah disiapkan sendiri.
+
+Login:
+
+  Username : admin
+  Password : password Cacti yang dibuat saat instalasi
+
+Setelah berhasil masuk, pastikan dashboard tampil normal.
+
+
+d. TIMEZONE PHP
+---------------
+Cek versi PHP:
+
+  php -v
+
+Contoh berikut menggunakan PHP 8.5. Ganti nomor versi jika
+versi yang terpasang berbeda.
+
+Edit konfigurasi PHP Apache:
+
+  sudo nano /etc/php/8.5/apache2/php.ini
+
+Atur:
+
+  date.timezone = Asia/Jakarta
+
+Edit konfigurasi PHP CLI:
+
+  sudo nano /etc/php/8.5/cli/php.ini
+
+Atur:
+
+  date.timezone = Asia/Jakarta
+
+Restart Apache:
+
+  sudo systemctl restart apache2
+
+
+e. KONFIGURASI SNMP UBUNTU
+--------------------------
+Backup konfigurasi:
+
+  sudo cp /etc/snmp/snmpd.conf /etc/snmp/snmpd.conf.bak
+
+Edit:
+
+  sudo nano /etc/snmp/snmpd.conf
+
+Pastikan directive aktif berikut tersedia:
+
+  agentaddress udp:127.0.0.1:161
+  rocommunity cactiLabRO 127.0.0.1
+
+Jika directive serupa sudah ada, sesuaikan yang aktif dan hindari
+konfigurasi ganda.
+
+Restart dan aktifkan SNMP:
+
+  sudo systemctl enable --now snmpd
+  sudo systemctl restart snmpd
+
+TES DASAR SNMP UBUNTU
+---------------------
+  snmpwalk -v2c -c cactiLabRO 127.0.0.1 .1.3.6.1.2.1.1
+
+Jika informasi sistem Linux muncul, SNMP Ubuntu merespons.
+
+
+f. TAMBAHKAN UBUNTU SEBAGAI DEVICE
+----------------------------------
+Di Cacti:
+
+  Console > Management > Devices > Add
+
+Isi:
+
+  Description       : ubuntu
+  Hostname          : 127.0.0.1
+  Device Template   : Net-SNMP Device
+  SNMP Version      : Version 2
+  SNMP Community    : cactiLabRO
+  SNMP Port         : 161
+
+Simpan device dan pastikan informasi SNMP terbaca.
+
+
+g. BUAT GRAPH UBUNTU
+--------------------
+Buka device Ubuntu:
+
+  Create Graphs for this Device
+
+Pada Graph Templates, pilih template yang diperlukan, misalnya:
+- CPU Utilization
+- Memory Usage
+- Load Average
+- Uptime
+
+Pada Data Query:
+
+  SNMP - Interface Statistics
+
+Pastikan interface terdeteksi, misalnya lo dan enp0s3.
+
+Jika belum muncul:
+- Refresh/reload Data Query.
+- Jika masih gagal, buka debug mode untuk melihat penyebabnya.
+- Setelah query berhasil, refresh halaman Create Graphs.
+
+Untuk grafik bandwidth:
+1. Pilih interface fisik, contoh enp0s3.
+2. Jangan pilih lo karena itu loopback.
+3. Pilih Graph Type: In/Out Bits.
+4. Klik Create.
+
+In/Out Bits menampilkan traffic masuk dan keluar dalam bit per detik.
+
+
+h. KONFIGURASI SNMP MIKROTIK
+----------------------------
+MikroTik yang menjadi gateway Ubuntu:
+
+  IP Address : 192.168.30.1
+  Community  : mikrotikRO
+
+Aktifkan SNMP melalui Winbox:
+
+  IP > SNMP
+
+Langkah:
+1. Aktifkan SNMP.
+2. Tambahkan community bernama mikrotikRO.
+3. Gunakan SNMP v2c.
+4. Batasi alamat sumber ke IP Cacti Server.
+5. Terapkan konfigurasi.
+
+PENTING:
+Ganti <IP-CACTI-SERVER> dengan alamat IP Ubuntu yang sebenarnya.
+Jangan membuka akses SNMP ke semua alamat jika tidak diperlukan.
+
+Contoh melalui terminal RouterOS:
+
+  /snmp set enabled=yes
+  /snmp community add name=mikrotikRO addresses=<IP-CACTI-SERVER>/32
+
+Jika community default public tidak diperlukan, nonaktifkan atau
+hapus sesuai kebijakan konfigurasi router.
+
+Pastikan firewall MikroTik mengizinkan UDP port 161 dari IP Cacti
+Server menuju router.
+
+
+i. TAMBAHKAN MIKROTIK SEBAGAI DEVICE CACTI
+------------------------------------------
+Di Cacti:
+
+  Console > Management > Devices > Add
+
+Isi:
+
+  Description       : MikroTik-Gateway
+  Hostname          : 192.168.30.1
+  Device Template   : Generic SNMP-enabled Host
+  SNMP Version      : Version 2
+  SNMP Community    : mikrotikRO
+  SNMP Port         : 161
+
+Jika tersedia template MikroTik yang sesuai, template tersebut
+juga dapat digunakan. Jika tidak, mulai dengan Generic
+SNMP-enabled Host.
+
+Simpan device.
+
+TES DASAR KONEKSI MIKROTIK
+--------------------------
+Dari Ubuntu:
+
+  ping -c 4 192.168.30.1
+
+Tes SNMP:
+
+  snmpwalk -v2c -c mikrotikRO 192.168.30.1 .1.3.6.1.2.1.1
+
+Jika informasi sistem router muncul, SNMP berhasil merespons.
+
+
+j. BUAT GRAPH MIKROTIK
+-----------------------
+Buka device MikroTik:
+
+  Create Graphs for this Device
+
+Pilih graph template yang tersedia dan/atau Data Query interface
+jika terdeteksi.
+
+Untuk grafik bandwidth:
+1. Pilih interface MikroTik yang ingin dipantau.
+2. Pilih Graph Type: In/Out Bits.
+3. Klik Create.
+
+Nama interface dapat berupa ether1, ether2, bridge, atau nama
+lain sesuai konfigurasi router.
+
+
+k. GRAPH TREE
+--------------
+Buka:
+
+  Console > Management > Trees
+
+1. Pilih Default Tree.
+2. Masuk ke mode Edit Tree.
+3. Tambahkan Root Branch, misalnya:
+     Ubuntu Server
+     MikroTik Gateway
+4. Masukkan graph yang sesuai ke masing-masing branch.
+5. Klik Finish Editing Tree.
+
+Buka tab Graphs > Tree View untuk melihat grafik.
+
+Jika tampilan Tree atau grafik terlihat kosong, periksa zoom
+browser. Tekan Ctrl + 0 untuk mengembalikan zoom ke 100%.
+
+Preview View dapat digunakan untuk memeriksa graph tanpa
+bergantung pada susunan Graph Tree.
+
+
+l. POLLER DAN PENGUMPULAN DATA
+-------------------------------
+Periksa cron:
+
+  sudo systemctl status cron
+
+Periksa jadwal Cacti:
+
+  sudo cat /etc/cron.d/cacti
+
+Interval umum/default adalah 5 menit. Pastikan Poller Interval
+di pengaturan Cacti sesuai dengan jadwal cron.
+
+Jangan membuat cron poller tambahan sebelum memeriksa konfigurasi
+bawaan paket agar tidak menjalankan poller ganda.
+
+Tunggu beberapa siklus polling, lalu periksa apakah grafik mulai
+menampilkan data.
+
+
+RINGKASAN COMMUNITY SNMP
+------------------------
+Perangkat             Community
+--------------------  -----------
+Ubuntu Server         cactiLabRO
+MikroTik Gateway      mikrotikRO
+
+Lokasi konfigurasi:
+- Ubuntu:
+    /etc/snmp/snmpd.conf
+
+- MikroTik:
+    Winbox > IP > SNMP > Communities
+
+- Cacti:
+    Console > Management > Devices > pilih device > SNMP Options
+
+
+CHECKLIST AKHIR
+---------------
+[ ] Ubuntu mendapat IP dan gateway yang benar.
+[ ] Timezone Ubuntu dan PHP menggunakan Asia/Jakarta.
+[ ] Apache2 dan MariaDB aktif.
+[ ] Login dashboard Cacti berhasil.
+[ ] SNMP Ubuntu merespons.
+[ ] Device Ubuntu berhasil ditambahkan.
+[ ] Interface Ubuntu terdeteksi.
+[ ] Graph CPU/Memory/Uptime berhasil dibuat.
+[ ] Graph bandwidth Ubuntu berhasil dibuat.
+[ ] SNMP MikroTik aktif dan dibatasi ke IP Cacti Server.
+[ ] SNMP MikroTik merespons dari Ubuntu.
+[ ] Device MikroTik berhasil ditambahkan.
+[ ] Graph interface MikroTik berhasil dibuat.
+[ ] Graph Tree menampilkan kedua perangkat.
+[ ] Poller berjalan dan grafik mulai berisi data.
+
+
+TROUBLESHOOTING SINGKAT
+-----------------------
+SNMP Ubuntu timeout:
+  Periksa /etc/snmp/snmpd.conf, lalu restart snmpd.
+
+SNMP MikroTik timeout:
+  Periksa community, IP sumber yang diizinkan, dan firewall UDP 161.
+
+Interface tidak muncul:
+  Refresh/reload Data Query. Jika perlu, periksa debug mode.
+
+Graph object ada tetapi tidak tampil di Tree:
+  Periksa Graph Tree dan zoom browser. Gunakan Ctrl + 0.
+
+Graph belum memiliki garis data:
+  Periksa cron/poller dan tunggu beberapa siklus polling.
+
+Jangan menghapus device, graph, atau file RRD hanya karena grafik
+belum langsung terlihat. Periksa penyebabnya terlebih dahulu.
+
+
+============================================================
+                         SELESAI
+============================================================
+
+
+gudnait
+
+
+©horizonexboy - dibuat dengan 2/3 malam dan 1/3 AI
+
+
+</p>
+
+</body>
+</html>
